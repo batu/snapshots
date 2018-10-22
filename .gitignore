@@ -1,6 +1,7 @@
 *.smc
 *.kafka
 *.pkl
+*.p
 
 
 __pycache__/
