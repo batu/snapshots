@@ -159,7 +159,7 @@ def parseArguments():
     assert results.save_prob and results.load_prob and results.experiment_name, "\nPlease specify the save and load probablities with the flags -s and -l and the experiment name with the -e flag."
     print(f"\n\n\nTHE SAVE PROBABILITY: {results.save_prob}")
     print(f"THE LOAD PROBABILITY: {results.load_prob}\n\n\n")
-    return (results.save_prob, results.load_prob, results.experiment_name)
+    return (float(results.save_prob), float(results.load_prob), results.experiment_name)
 
 def save_hyperparameters(filenames: list, path_to_file: str, save_prob: float, load_prob: float, experiment_name:str, breadcrumb="# BREADCRUMBS") -> None:
     """
@@ -171,7 +171,7 @@ def save_hyperparameters(filenames: list, path_to_file: str, save_prob: float, l
     with open(path_to_file, "a") as dest:
         dest.write(f"Experiment name: {experiment_name} \n")
         dest.write(f"Save prob:{save_prob} \n")
-        dest.write(f"Load prob:{save_prob} \n")
+        dest.write(f"Load prob:{load_prob} \n")
         for filename in filenames:
             with open(filename, "r") as source:
                 saving = False

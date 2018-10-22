@@ -21,7 +21,7 @@ from stable_baselines.results_plotter import load_results, ts2xy
 from stable_baselines import PPO2, DQN, PPO2_SH
 # BREADCRUMBS_START
 NUM_CPU = 1
-ENV_NAME = "MountainCar-v0"
+ENV_NAME = "BreakoutNoFrameskip-v4"
 # BREADCRUMBS_END
 save_prob, load_prob, experiment_name = parseArguments()
 
@@ -42,9 +42,9 @@ except:
 
 models_path = "Results/SavedModels/"
 
-changes = """Testing the save from snapshots on the mountain car. """
-reasoning = """This is inspired by the Montezuma paper."""
-hypothesis = """Being able to train on PPO. """
+changes = """ Changed to the new and improved RL library. Started using PPO"""
+reasoning = """PPO is the go to algorithm."""
+hypothesis = """Better results. Not intially but after tweaking. """
 
 
 if not REPLAY:
@@ -90,28 +90,35 @@ print("Training has started!")
 
 # BREADCRUMBS_START
 # Create an OpenAIgym environment.
-#env = make_atari_snapshot_env(ENV_NAME, num_env=NUM_CPU , seed=37, snapshot_save_prob=0.001, snapshot_load_prob=0.75)
+env = make_atari_snapshot_env(ENV_NAME, num_env=NUM_CPU , seed=37, snapshot_save_prob=0.001, snapshot_load_prob=0.75)
 
-env = SnapshotVecEnv([make_env(i) for i in range(NUM_CPU)],
-                       snapshot_save_prob=save_prob,
-                       snapshot_load_prob=load_prob,
-                       human_snapshots=True,
-                       training_len=40000)
+print(save_prob)
+print(type(save_prob))
+# env = gym.make(ENV_NAME)
+#env = Monitor(env, filename=run_path, allow_early_resets=True)
+# env = SnapshotVecEnv([lambda: env for i in range(NUM_CPU)],
+#                        snapshot_save_prob=save_prob,
+#                        snapshot_load_prob=load_prob)
+
+
+# env = SnapshotVecEnv([make_env(i) for i in range(NUM_CPU)],
+#                        snapshot_save_prob=0.001,
+#                        snapshot_load_prob=1)
 
 # Frame-stacking with 4 frames
-env = VecFrameStack(env, n_stack=4)
+# env = VecFrameStack(env, n_stack=4)
 
 # Add some param noise for exploration
 model = PPO2(CnnPolicy, env, verbose=1, tensorboard_log=f"{run_path}",
-             gamma=0.99,
-             lam=.95,
-             vf_coef=1,
-             ent_coef=0.01,
-             noptepochs=3,
-             cliprange=0.1,
-             learning_rate=5e-4,
-             nminibatches=4,
-             n_steps=128,
+             # gamma=0.99,
+             # lam=.95,
+             # vf_coef=1,
+             # ent_coef=0.005,
+             # noptepochs=3,
+             # cliprange=0.1,
+             # learning_rate=5e-4,
+             # nminibatches=4,
+             # n_steps=32,
              )
 
 best_mean_reward, n_steps = -np.inf, 0
@@ -125,7 +132,7 @@ def callback(_locals, _globals):
   global n_steps, best_mean_reward, last_name
   # Print stats every 1000 calls
 
-  if (n_steps + 1) % 100 == 0:
+  if (n_steps + 1) % 10 == 0:
       # Evaluate policy performance
       x, y = ts2xy(load_results(run_path), 'timesteps')
       if len(x) > 0:
@@ -146,9 +153,16 @@ def callback(_locals, _globals):
   return False
 
 # Train the agent
-model.learn(total_timesteps= 40000, callback=None)
+model.learn(total_timesteps= 25000,)
 # BREADCRUMBS_END
 model.save(f"{run_path}/{ENV_NAME}_final.pkl")
+
+obs = env.reset()
+while True:
+    action, _states = model.predict(obs)
+    obs, rewards, dones, info = env.step(action)
+    env.render()
+
 
 print("The training has completed!")
 
