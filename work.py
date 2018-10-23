@@ -1,22 +1,17 @@
 import gym
 
-from stable_baselines.common.policies import MlpPolicy
-from stable_baselines.common.vec_env import SubprocVecEnv
-from stable_baselines import PPO2
+from stable_baselines.common.vec_env import DummyVecEnv
+from stable_baselines.deepq.policies import MlpPolicy
+from stable_baselines import DQN
 
-# multiprocess environment
-n_cpu = 1
-env = SubprocVecEnv([lambda: gym.make('CartPole-v1') for i in range(n_cpu)])
+env = gym.make('MountainCar-v0')
+env = DummyVecEnv([lambda: env])
 
-model = PPO2(MlpPolicy, env, verbose=1)
-model.learn(total_timesteps=25000)
-model.save("ppo2_cartpole")
+model = DQN(MlpPolicy, env, verbose=1)
+model.learn(total_timesteps=100000)
 
-del model # remove to demonstrate saving and loading
 
-model = PPO2.load("ppo2_cartpole")
 
-# Enjoy trained agent
 obs = env.reset()
 while True:
     action, _states = model.predict(obs)

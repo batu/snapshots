@@ -59,7 +59,6 @@ def rollout(env):
         if (total_timesteps % 5 == 0):
             cloudpickle.dump(obser, open(f"HumanSnapshots/MountainCar/{int(total_timesteps/5)}.p", "wb" ) )
 
-
         if r != 0:
             print("reward %0.3f" % r)
 

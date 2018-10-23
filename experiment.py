@@ -2,10 +2,12 @@ import os
 import gym
 import time
 import sys
+import cloudpickle
 import argparse
 from support_utils import save_hyperparameters, parseArguments
-
+import imageio
 import numpy as np
+import six
 import matplotlib.pyplot as plt
 
 from stable_baselines import logger
@@ -17,11 +19,14 @@ from stable_baselines.common.vec_env import VecFrameStack
 from stable_baselines.bench import Monitor
 from stable_baselines.common import set_global_seeds
 from stable_baselines.results_plotter import load_results, ts2xy
+from stable_baselines.deepq.policies import MlpPolicy as DQNMlpPolicy
 
 from stable_baselines import PPO2, DQN, PPO2_SH
 # BREADCRUMBS_START
 NUM_CPU = 1
 ENV_NAME = "MountainCar-v0"
+human_snapshots = False
+training_length = 25000
 # BREADCRUMBS_END
 save_prob, load_prob, experiment_name = parseArguments()
 
@@ -42,7 +47,7 @@ except:
 
 models_path = "Results/SavedModels/"
 
-changes = """Testing the save from snapshots on the mountain car. """
+changes = """Loading the snapshots created from the trained algorithm """
 reasoning = """This is inspired by the Montezuma paper."""
 hypothesis = """Being able to train on PPO. """
 
@@ -72,8 +77,6 @@ os.mkdir(run_path)
 # This function saves all the important hypterparameters to the run summary file.
 save_hyperparameters(["experiment.py"], f"{run_path}/run_summary.txt", save_prob=save_prob, load_prob=load_prob, experiment_name=experiment_name)
 
-
-
 def make_env(rank):
     def _thunk():
         env = make_atari(ENV_NAME)
@@ -92,27 +95,35 @@ print("Training has started!")
 # Create an OpenAIgym environment.
 #env = make_atari_snapshot_env(ENV_NAME, num_env=NUM_CPU , seed=37, snapshot_save_prob=0.001, snapshot_load_prob=0.75)
 
-env = SnapshotVecEnv([make_env(i) for i in range(NUM_CPU)],
+# env = SnapshotVecEnv([make_env(i) for i in range(NUM_CPU)],
+#                        snapshot_save_prob=save_prob,
+#                        snapshot_load_prob=load_prob,
+#                        human_snapshots=True,
+#                        training_len=40000)
+
+env = SnapshotVecEnv([lambda:Monitor(gym.make(ENV_NAME), filename=run_path, allow_early_resets=True) for i in range(NUM_CPU)],
                        snapshot_save_prob=save_prob,
                        snapshot_load_prob=load_prob,
-                       human_snapshots=True,
-                       training_len=40000)
+                       human_snapshots=human_snapshots,
+                       training_len=training_length)
 
+# env = Monitor(env, filename=run_path, allow_early_resets=True)
 # Frame-stacking with 4 frames
-env = VecFrameStack(env, n_stack=4)
+# env = VecFrameStack(env, n_stack=4)
 
 # Add some param noise for exploration
-model = PPO2(CnnPolicy, env, verbose=1, tensorboard_log=f"{run_path}",
-             gamma=0.99,
-             lam=.95,
-             vf_coef=1,
-             ent_coef=0.01,
-             noptepochs=3,
-             cliprange=0.1,
-             learning_rate=5e-4,
-             nminibatches=4,
-             n_steps=128,
-             )
+# model = PPO2(MlpPolicy, env, verbose=1, tensorboard_log=f"{run_path}",
+#              gamma=0.99,
+#              lam=.95,
+#              vf_coef=1,
+#              ent_coef=0.01,
+#              noptepochs=3,
+#              cliprange=0.1,
+#              learning_rate=5e-4,
+#              nminibatches=4,
+#              n_steps=128,
+#              )
+model = DQN(DQNMlpPolicy, env, verbose=1)
 
 best_mean_reward, n_steps = -np.inf, 0
 last_name = "dummy"
@@ -146,13 +157,38 @@ def callback(_locals, _globals):
   return False
 
 # Train the agent
-model.learn(total_timesteps= 40000, callback=None)
+model.learn(total_timesteps= training_length, callback=callback)
 # BREADCRUMBS_END
 model.save(f"{run_path}/{ENV_NAME}_final.pkl")
 
 print("The training has completed!")
+os.mkdir(f'{run_path}/GIF')
 
+env = DummyVecEnv([lambda:gym.make(ENV_NAME)for i in range(NUM_CPU)])
+frames = []
+obs = env.reset()
+for i in range(800):
+    action, _ = model.predict(obs)
+    obs, _, dones ,_ = env.step(action)
+    # if (i % 4 == 0):
+    #     cloudpickle.dump(obs[0], open(f"AlgoSnapshots/MountainCar/{int(i/5)}.p", "wb" ) )
+    frames.append(env.render(mode = 'rgb_array'))
+    if any(dones):
+        obs = env.reset()
 
+for i, frame in enumerate(frames):
+    if(i % 8 == 0):
+        plt.imshow(frame)
+        plt.savefig(f'{run_path}/GIF/{i}.png')
+
+# obs = env.reset()
+# while True:
+#     time.sleep(0.02)
+#     action, _states = model.predict(obs)
+#     obs, rewards, dones, info = env.step(action)
+#     env.render()
+#     if any(dones):
+#         env.reset()
 
 
 #     :param policy: (ActorCriticPolicy or str) The policy model to use (MlpPolicy, CnnPolicy, CnnLstmPolicy, ...)
