@@ -25,161 +25,199 @@ from stable_baselines import PPO2, DQN, PPO2_SH
 # BREADCRUMBS_START
 NUM_CPU = 1
 ENV_NAME = "MountainCar-v0"
-human_snapshots = False
-training_length = 25000
-# BREADCRUMBS_END
+human_snapshots = True
+training_length = 40000
+snapshot_usage_percentage = 1
 save_prob, load_prob, experiment_name = parseArguments()
-
-
-REPLAY = False
-TB_path = f"Results/Tensorboard/{experiment_name}/"
-
-run_number = 0
-try:
-    os.mkdir(TB_path[:-1])
-except:
-    pass
-
-try:
-    os.mkdir(f"{TB_path}README")
-except:
-    pass
-
-models_path = "Results/SavedModels/"
-
-changes = """Loading the snapshots created from the trained algorithm """
-reasoning = """This is inspired by the Montezuma paper."""
-hypothesis = """Being able to train on PPO. """
-
-
-if not REPLAY:
-    if len(hypothesis) + len(changes) + len(reasoning) < 10:
-        print("NOT ENOUGH LOGGING INFO")
-        print("Please write more about the changes and reasoning.")
-        exit()
-
-    with open(f"{TB_path}/README/README.txt", "w") as readme:
-        start_time_ascii = time.asctime(time.localtime(time.time()))
-        algorithm = os.path.basename(__file__)[:-2]
-        print(f"Experiment start time: {start_time_ascii}", file=readme)
-        print(f"\nAlgorithm:\n{algorithm}", file=readme)
-        print(f"\nThe Changes:\n{changes}", file=readme)
-        print(f"\nReasoning:\n{reasoning}", file=readme)
-        print(f"\nHypothesis:\n{hypothesis}", file=readme)
-        print(f"\nResults:\n", file=readme)
-
-
-folder_count = len([f for f in os.listdir(TB_path) if not os.path.isfile(os.path.join(models_path, f))])
-run_name = f"run{folder_count}"
-run_path = f'{TB_path}{run_name}'
-os.mkdir(run_path)
-
-# This function saves all the important hypterparameters to the run summary file.
-save_hyperparameters(["experiment.py"], f"{run_path}/run_summary.txt", save_prob=save_prob, load_prob=load_prob, experiment_name=experiment_name)
-
-def make_env(rank):
-    def _thunk():
-        env = make_atari(ENV_NAME)
-        env.seed(37 + rank)
-        env = Monitor(env, filename=run_path, allow_early_resets=True)
-        return wrap_deepmind(env)
-    return _thunk
-set_global_seeds(37)
-
-
-start_time_ascii = time.asctime(time.localtime(time.time()))
-start_time = time.time()
-print("Training has started!")
-
-# BREADCRUMBS_START
-# Create an OpenAIgym environment.
-#env = make_atari_snapshot_env(ENV_NAME, num_env=NUM_CPU , seed=37, snapshot_save_prob=0.001, snapshot_load_prob=0.75)
-
-# env = SnapshotVecEnv([make_env(i) for i in range(NUM_CPU)],
-#                        snapshot_save_prob=save_prob,
-#                        snapshot_load_prob=load_prob,
-#                        human_snapshots=True,
-#                        training_len=40000)
-
-env = SnapshotVecEnv([lambda:Monitor(gym.make(ENV_NAME), filename=run_path, allow_early_resets=True) for i in range(NUM_CPU)],
-                       snapshot_save_prob=save_prob,
-                       snapshot_load_prob=load_prob,
-                       human_snapshots=human_snapshots,
-                       training_len=training_length)
-
-# env = Monitor(env, filename=run_path, allow_early_resets=True)
-# Frame-stacking with 4 frames
-# env = VecFrameStack(env, n_stack=4)
-
-# Add some param noise for exploration
-# model = PPO2(MlpPolicy, env, verbose=1, tensorboard_log=f"{run_path}",
-#              gamma=0.99,
-#              lam=.95,
-#              vf_coef=1,
-#              ent_coef=0.01,
-#              noptepochs=3,
-#              cliprange=0.1,
-#              learning_rate=5e-4,
-#              nminibatches=4,
-#              n_steps=128,
-#              )
-model = DQN(DQNMlpPolicy, env, verbose=1)
-
-best_mean_reward, n_steps = -np.inf, 0
-last_name = "dummy"
-def callback(_locals, _globals):
-  """
-  Callback called at each step (for DQN an others) or after n steps (see ACER or PPO2)
-  :param _locals: (dict)
-  :param _globals: (dict)
-  """
-  global n_steps, best_mean_reward, last_name
-  # Print stats every 1000 calls
-
-  if (n_steps + 1) % 100 == 0:
-      # Evaluate policy performance
-      x, y = ts2xy(load_results(run_path), 'timesteps')
-      if len(x) > 0:
-          mean_reward = np.mean(y[-100:])
-          print(f"Save probability: {save_prob}, load probability: {load_prob}")
-          print("Best mean reward: {:.2f} - Last mean reward per episode: {:.2f}".format(best_mean_reward, mean_reward))
-
-          # New best model, you could save the agent here
-          if mean_reward > best_mean_reward:
-              best_mean_reward = mean_reward
-              # Example for saving best model
-              if os.path.exists(run_path + f'/{last_name}'):
-                  os.remove(run_path + f'/{last_name}')
-              print("Saving new best model")
-              last_name = f"{best_mean_reward:.1f}_{ENV_NAME}_model.pkl"
-              _locals['self'].save(run_path + f'/{best_mean_reward:.1f}_{ENV_NAME}_model.pkl')
-  n_steps += 1
-  return False
-
-# Train the agent
-model.learn(total_timesteps= training_length, callback=callback)
+num_runs = 20
+treatments = [True, False]
+for treatment in treatments:
+    if treatment:
+        snapshot_usage_percentage = 0.75
+    else:
+        snapshot_usage_percentage = 1
+    experiment_name = f"{experiment_name}_TREATMENT" if treatment else f"{experiment_name}_VANILLA"
+    for run_count in range(num_runs):
 # BREADCRUMBS_END
-model.save(f"{run_path}/{ENV_NAME}_final.pkl")
+        REPLAY = False
+        TB_path = f"Results/Tensorboard/{experiment_name}/"
 
-print("The training has completed!")
-os.mkdir(f'{run_path}/GIF')
+        run_number = 0
+        try:
+            os.mkdir(TB_path[:-1])
+        except:
+            pass
 
-env = DummyVecEnv([lambda:gym.make(ENV_NAME)for i in range(NUM_CPU)])
-frames = []
-obs = env.reset()
-for i in range(800):
-    action, _ = model.predict(obs)
-    obs, _, dones ,_ = env.step(action)
-    # if (i % 4 == 0):
-    #     cloudpickle.dump(obs[0], open(f"AlgoSnapshots/MountainCar/{int(i/5)}.p", "wb" ) )
-    frames.append(env.render(mode = 'rgb_array'))
-    if any(dones):
-        obs = env.reset()
+        try:
+            os.mkdir(f"{TB_path}README")
+        except:
+            pass
 
-for i, frame in enumerate(frames):
-    if(i % 8 == 0):
-        plt.imshow(frame)
-        plt.savefig(f'{run_path}/GIF/{i}.png')
+        models_path = "Results/SavedModels/"
+
+        changes = """Added snapshot usage percentage. The last percentage doesnt use the snapshot but resets to begining."""
+        reasoning = """The snapshots should be the kickstarter but there should be enough time for the system to learn from the begining as well."""
+        hypothesis = """Being able to train on PPO. """
+
+
+        if not REPLAY:
+            if len(hypothesis) + len(changes) + len(reasoning) < 10:
+                print("NOT ENOUGH LOGGING INFO")
+                print("Please write more about the changes and reasoning.")
+                exit()
+
+            with open(f"{TB_path}/README/README.txt", "w") as readme:
+                start_time_ascii = time.asctime(time.localtime(time.time()))
+                algorithm = os.path.basename(__file__)[:-2]
+                print(f"Experiment start time: {start_time_ascii}", file=readme)
+                print(f"\nAlgorithm:\n{algorithm}", file=readme)
+                print(f"\nThe Changes:\n{changes}", file=readme)
+                print(f"\nReasoning:\n{reasoning}", file=readme)
+                print(f"\nHypothesis:\n{hypothesis}", file=readme)
+                print(f"\nResults:\n", file=readme)
+
+
+        folder_count = len([f for f in os.listdir(TB_path) if not os.path.isfile(os.path.join(models_path, f))])
+        run_name = f"run{folder_count}"
+        run_path = f'{TB_path}{run_name}'
+        os.mkdir(run_path)
+
+        # This function saves all the important hypterparameters to the run summary file.
+        save_hyperparameters(["experiment.py"], f"{run_path}/run_summary.txt", save_prob=save_prob, load_prob=load_prob, experiment_name=experiment_name)
+
+        def make_env(rank):
+            def _thunk():
+                env = make_atari(ENV_NAME)
+                env.seed(37 + rank)
+                env = Monitor(env, filename=run_path, allow_early_resets=True)
+                return wrap_deepmind(env)
+            return _thunk
+        set_global_seeds(37)
+
+
+        start_time_ascii = time.asctime(time.localtime(time.time()))
+        start_time = time.time()
+        print("Training has started!")
+
+        # BREADCRUMBS_START
+        # Create an OpenAIgym environment.
+        #env = make_atari_snapshot_env(ENV_NAME, num_env=NUM_CPU , seed=37, snapshot_save_prob=0.001, snapshot_load_prob=0.75)
+
+        # env = SnapshotVecEnv([make_env(i) for i in range(NUM_CPU)],
+        #                        snapshot_save_prob=save_prob,
+        #                        snapshot_load_prob=load_prob,
+        #                        human_snapshots=True,
+        #                        training_len=40000)
+
+        env = SnapshotVecEnv([lambda:Monitor(gym.make(ENV_NAME), filename=run_path, allow_early_resets=True) for i in range(NUM_CPU)],
+                               snapshot_save_prob=save_prob,
+                               snapshot_load_prob=load_prob,
+                               human_snapshots=human_snapshots,
+                               training_len=training_length,
+                               snapshot_usage_percentage=snapshot_usage_percentage)
+
+        # env = Monitor(env, filename=run_path, allow_early_resets=True)
+        # Frame-stacking with 4 frames
+        # env = VecFrameStack(env, n_stack=4)
+
+        # Add some param noise for exploration
+        # model = PPO2(MlpPolicy, env, verbose=1, tensorboard_log=f"{run_path}",
+        #              gamma=0.99,
+        #              lam=.95,
+        #              vf_coef=1,
+        #              ent_coef=0.01,
+        #              noptepochs=3,
+        #              cliprange=0.1,
+        #              learning_rate=5e-4,
+        #              nminibatches=4,
+        #              n_steps=128,
+        #              )
+        model = DQN(DQNMlpPolicy, env, verbose=1)
+
+        best_mean_reward, n_steps = -np.inf, 0
+        last_name = "dummy"
+        def callback(_locals, _globals):
+          """
+          Callback called at each step (for DQN an others) or after n steps (see ACER or PPO2)
+          :param _locals: (dict)
+          :param _globals: (dict)
+          """
+          global n_steps, best_mean_reward, last_name
+          # Print stats every 1000 calls
+
+          if (n_steps + 1) % 100 == 0:
+              # Evaluate policy performance
+              x, y = ts2xy(load_results(run_path), 'timesteps')
+              if len(x) > 0:
+                  mean_reward = np.mean(y[-100:])
+                  print(f"Save probability: {save_prob}, load probability: {load_prob}")
+                  print("Best mean reward: {:.2f} - Last mean reward per episode: {:.2f}".format(best_mean_reward, mean_reward))
+
+                  # New best model, you could save the agent here
+                  if mean_reward > best_mean_reward:
+                      best_mean_reward = mean_reward
+                      # Example for saving best model
+                      if os.path.exists(run_path + f'/{last_name}'):
+                          os.remove(run_path + f'/{last_name}')
+                      print("Saving new best model")
+                      last_name = f"{best_mean_reward:.1f}_{ENV_NAME}_model.pkl"
+                      _locals['self'].save(run_path + f'/{best_mean_reward:.1f}_{ENV_NAME}_model.pkl')
+          n_steps += 1
+          return False
+
+        # Train the agent
+        model.learn(total_timesteps= training_length, callback=callback)
+        # BREADCRUMBS_END
+        model.save(f"{run_path}/{ENV_NAME}_final.pkl")
+
+        print("The training has completed!")
+        os.mkdir(f'{run_path}/GIF')
+
+        env = DummyVecEnv([lambda:gym.make(ENV_NAME)for i in range(NUM_CPU)])
+
+        win_count = 0
+        lose_count = 0
+        for _ in range(100):
+            obs = env.reset()
+            for i in range(199):
+                action, _ = model.predict(obs)
+                obs, _, dones ,_ = env.step(action)
+                if any(dones):
+                    print("EEEEEEEEEEEEEAAAA")
+                    results_name = f"{run_path}/results.txt"
+                    with open(f"{results_name}", "a+") as readme:
+                        readme.write(f"1\n")
+                        win_count += 1
+                    break
+            else:
+                print("NOT VICTORY")
+                results_name = f"{run_path}/results.txt"
+                with open(f"{results_name}", "a+") as readme_fail:
+                    readme_fail.write(f"0\n")
+                    lose_count += 1
+
+        results_name = f"{TB_path}/README/AllResults.txt"
+        with open(f"{results_name}", "a+") as readme_fail:
+            readme_fail.write(f"Results for {run_name}: W {win_count}, L {lose_count}\n")
+
+
+# GIFFER
+# env = DummyVecEnv([lambda:gym.make(ENV_NAME)for i in range(NUM_CPU)])
+# frames = []
+# obs = env.reset()
+# for i in range(800):
+#     action, _ = model.predict(obs)
+#     obs, _, dones ,_ = env.step(action)
+#     # if (i % 4 == 0):
+#     #     cloudpickle.dump(obs[0], open(f"AlgoSnapshots/MountainCar/{int(i/5)}.p", "wb" ) )
+#     frames.append(env.render(mode = 'rgb_array'))
+#     if any(dones):
+#         obs = env.reset()
+#
+# for i, frame in enumerate(frames):
+#     if(i % 8 == 0):
+#         plt.imshow(frame)
+#         plt.savefig(f'{run_path}/GIF/{i}.png')
 
 # obs = env.reset()
 # while True:
