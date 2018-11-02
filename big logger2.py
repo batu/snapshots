@@ -188,7 +188,7 @@ for bool in bools:
                     obs, _, dones ,_ = env.step(action)
                     if any(dones):
                         print("EEEEEEEEEEEEEAAAA")
-                        results_name = "sh_results.txt" if bool else "snapshot_results.txt"
+                        results_name = "snapshot.txt" if bool else "vanilla.txt"
                         with open(f"{results_name}", "a+") as readme:
                             readme.write(f"{run_count_number},{timestep},1\n")
 
@@ -200,7 +200,7 @@ for bool in bools:
 
                 else:
                     print("NOT VICTORY")
-                    results_name = "humansh_results.txt" if bool else "snapshot_results.txt"
+                    results_name = "snapshot.txt" if bool else "vanilla.txt"
                     with open(f"{results_name}", "a+") as readme_fail:
                         readme_fail.write(f"{run_count_number},{timestep},0\n")
                     results_name = f"{run_path}/results.txt"
